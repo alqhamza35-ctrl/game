@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pocket Front | جبهة الجيب</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Segoe UI', 'Tahoma', 'Geneva', 'Verdana', 'sans-serif'],
+                    },
+                    colors: {
+                        player: '#3b82f6',
+                        playerDark: '#1d4ed8',
+                        enemy: '#ef4444',
+                        enemyDark: '#b91c1c',
+                        energy: '#eab308'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            touch-action: manipulation;
+            background-color: #0f172a;
+            color: #f8fafc;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Glassmorphism elements */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.15s ease-in-out;
+        }
+        .glass-card:hover:not(:disabled) {
+            border-color: rgba(59, 130, 246, 0.5);
+            transform: translateY(-2px);
+        }
+        .glass-card:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        /* Custom scrollbar for game stats if needed */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="h-full w-full flex flex-col font-sans justify-between relative text-slate-100">
+
+    <!-- Top Navigation / Status Header -->
+    <header class="glass-panel w-full z-20 px-4 py-2 flex flex-wrap items-center justify-between shadow-lg gap-2">
+        <!-- Blue Player Base Stats -->
+        <div class="flex items-center gap-3 min-w-[200px]">
+            <div class="w-10 h-10 rounded-xl bg-player/20 border border-player/50 flex items-center justify-center text-player font-bold text-lg shadow-inner">
+                🛡️
+            </div>
+            <div class="flex-1">
+                <div class="flex justify-between text-xs font-semibold mb-1">
+                    <span class="text-blue-400">قاعدتك (Player)</span>
+                    <span id="player-hp-text" class="text-slate-300">1000 / 1000</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
+                    <div id="player-hp-bar" class="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-200" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Match Info & Energy -->
+        <div class="flex items-center gap-4 bg-slate-900/60 px-4 py-1.5 rounded-2xl border border-slate-800 shadow-inner">
+            <!-- Level / Wave Indicator -->
+            <div class="text-center border-l border-slate-700 pl-3">
+                <span class="block text-[10px] text-slate-400 uppercase tracking-wider">المستوى</span>
+                <span id="level-display" class="font-extrabold text-blue-400 text-sm">مستوى 1</span>
+            </div>
+
+            <!-- Energy Counter -->
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold animate-pulse text-sm">
+                    ⚡
+                </div>
+                <div>
+                    <div class="flex items-baseline gap-1">
+                        <span id="energy-text" class="text-xl font-black text-amber-400">0</span>
+                        <span class="text-xs text-amber-500/80 font-bold">/ 100</span>
+                    </div>
+                    <div class="w-24 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div id="energy-bar" class="bg-amber-400 h-full transition-all duration-100" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timer -->
+            <div class="text-center border-r border-slate-700 pr-3">
+                <span class="block text-[10px] text-slate-400 uppercase tracking-wider">الوقت</span>
+                <span id="game-timer" class="font-mono text-sm text-slate-200 font-bold">00:00</span>
+            </div>
+        </div>
+
+        <!-- Red Enemy Base Stats & Options -->
+        <div class="flex items-center gap-3 min-w-[200px]">
+            <div class="flex-1 text-left" dir="ltr">
+                <div class="flex justify-between text-xs font-semibold mb-1">
+                    <span class="text-red-400">قاعدة العدو (Enemy)</span>
+                    <span id="enemy-hp-text" class="text-slate-300">1000 / 1000</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
+                    <div id="enemy-hp-bar" class="bg-gradient-to-r from-red-500 to-rose-600 h-full rounded-full transition-all duration-200" style="width: 100%;"></div>
+                </div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-enemy/20 border border-enemy/50 flex items-center justify-center text-enemy font-bold text-lg shadow-inner">
+                💀
+            </div>
+            <!-- Audio Toggle & Pause Button -->
+            <button id="sound-toggle-btn" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" title="الصوت">
+                🔊
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Canvas Container -->
+    <main class="relative flex-1 w-full h-full overflow-hidden bg-slate-950">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Dynamic On-Canvas Quick Notifications -->
+        <div id="toast-container" class="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none flex flex-col gap-2 z-10"></div>
+    </main>
+
+    <!-- Bottom Control Bar / Unit Selection -->
+    <footer class="glass-panel w-full z-20 p-3 flex flex-wrap items-center justify-center gap-2 sm:gap-4 shadow-2xl">
+        <!-- Units Spawners -->
+        <div class="flex items-center gap-2 sm:gap-3 overflow-x-auto py-1">
+            <!-- Infantry Unit Button (Key: 1) -->
+            <button id="btn-spawn-infantry" class="glass-card relative flex flex-col items-center p-2 rounded-xl w-20 sm:w-24 group disabled:opacity-40 disabled:pointer-events-none">
+                <span class="absolute -top-2 -right-1 bg-slate-800 border border-slate-600 text-[10px] text-slate-300 rounded px-1.5 py-0.5">1</span>
+                <div class="text-2xl mb-0.5 group-hover:scale-110 transition">🪖</div>
+                <span class="text-xs font-bold text-slate-200">مشاة</span>
+                <div class="flex items-center text-amber-400 text-xs font-extrabold mt-1">
+                    ⚡ 15
+                </div>
+                <!-- Cooldown overlay -->
+                <div id="cd-infantry" class="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center text-xs font-bold text-amber-400 hidden">0.0s</div>
+            </button>
+
+            <!-- Tank Heavy Unit (Key: 2) -->
+            <button id="btn-spawn-tank" class="glass-card relative flex flex-col items-center p-2 rounded-xl w-20 sm:w-24 group disabled:opacity-40 disabled:pointer-events-none">
+                <span class="absolute -top-2 -right-1 bg-slate-800 border border-slate-600 text-[10px] text-slate-300 rounded px-1.5 py-0.5">2</span>
+                <div class="text-2xl mb-0.5 group-hover:scale-110 transition">🛡️</div>
+                <span class="text-xs font-bold text-slate-200">دبابة</span>
+                <div class="flex items-center text-amber-400 text-xs font-extrabold mt-1">
+                    ⚡ 40
+                </div>
+                <div id="cd-tank" class="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center text-xs font-bold text-amber-400 hidden">0.0s</div>
+            </button>
+
+            <!-- Sniper Unit (Key: 3) -->
+            <button id="btn-spawn-sniper" class="glass-card relative flex flex-col items-center p-2 rounded-xl w-20 sm:w-24 group disabled:opacity-40 disabled:pointer-events-none">
+                <span class="absolute -top-2 -right-1 bg-slate-800 border border-slate-600 text-[10px] text-slate-300 rounded px-1.5 py-0.5">3</span>
+                <div class="text-2xl mb-0.5 group-hover:scale-110 transition">🎯</div>
+                <span class="text-xs font-bold text-slate-200">قناص</span>
+                <div class="flex items-center text-amber-400 text-xs font-extrabold mt-1">
+                    ⚡ 30
+                </div>
+                <div id="cd-sniper" class="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center text-xs font-bold text-amber-400 hidden">0.0s</div>
+            </button>
+
+            <!-- Artillery Launcher (Key: 4) -->
+            <button id="btn-spawn-artillery" class="glass-card relative flex flex-col items-center p-2 rounded-xl w-20 sm:w-24 group disabled:opacity-40 disabled:pointer-events-none">
+                <span class="absolute -top-2 -right-1 bg-slate-800 border border-slate-600 text-[10px] text-slate-300 rounded px-1.5 py-0.5">4</span>
+                <div class="text-2xl mb-0.5 group-hover:scale-110 transition">🚀</div>
+                <span class="text-xs font-bold text-slate-200">صاروخية</span>
+                <div class="flex items-center text-amber-400 text-xs font-extrabold mt-1">
+                    ⚡ 60
+                </div>
+                <div id="cd-artillery" class="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center text-xs font-bold text-amber-400 hidden">0.0s</div>
+            </button>
+        </div>
+
+        <div class="h-10 w-px bg-slate-800 mx-1 hidden sm:block"></div>
+
+        <!-- Special Commander Abilities -->
+        <div class="flex items-center gap-2">
+            <!-- Airstrike (Key: Q) -->
+            <button id="btn-ability-airstrike" class="glass-card relative flex flex-col items-center p-2 rounded-xl w-20 sm:w-22 border-amber-500/30 group disabled:opacity-40 disabled:pointer-events-none">
+                <span class="absolute -top-2 -right-1 bg-amber-950 border border-amber-600 text-[10px] text-amber-300 rounded px-1.5 py-0.5">Q</span>
+                <div class="text-2xl mb-0.5 group-hover:scale-110 transition text-amber-400">💥</div>
+                <span class="text-[11px] font-bold text-amber-200">قصف جوي</span>
+                <div class="flex items-center text-amber-400 text-xs font-extrabold mt-1">
+                    ⚡ 75
+                </div>
+                <div id="cd-airstrike" class="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center text-xs font-bold text-amber-400 hidden">0.0s</div>
+            </button>
+
+            <!-- Repair Base (Key: W) -->
+            <button id="btn-ability-repair" class="glass-card relative flex flex-col items-center p-2 rounded-xl w-20 sm:w-22 border-emerald-500/30 group disabled:opacity-40 disabled:pointer-events-none">
+                <span class="absolute -top-2 -right-1 bg-emerald-950 border border-emerald-600 text-[10px] text-emerald-300 rounded px-1.5 py-0.5">W</span>
+                <div class="text-2xl mb-0.5 group-hover:scale-110 transition text-emerald-400">🛠️</div>
+                <span class="text-[11px] font-bold text-emerald-200">إصلاح</span>
+                <div class="flex items-center text-amber-400 text-xs font-extrabold mt-1">
+                    ⚡ 50
+                </div>
+                <div id="cd-repair" class="absolute inset-0 bg-slate-950/80 rounded-xl flex items-center justify-center text-xs font-bold text-emerald-400 hidden">0.0s</div>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Game Start Modal Overlay -->
+    <div id="start-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl border border-slate-700/60 relative overflow-hidden">
+            <div class="absolute -top-20 -left-20 w-40 h-40 bg-blue-600/30 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-20 -right-20 w-40 h-40 bg-red-600/30 rounded-full blur-3xl"></div>
+
+            <div class="relative z-10">
+                <div class="text-5xl mb-3 animate-bounce">⚔️</div>
+                <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-red-400 mb-2">
+                    جبهة الجيب | Pocket Front
+                </h1>
+                <p class="text-sm text-slate-300 mb-6 leading-relaxed">
+                    قم باستدعاء القوات وتسيير المصفحات، ودافع عن قاعدتك الزرقاء حتى تدمير حصن العدو الأحمر بالكامل!
+                </p>
+
+                <!-- Difficulty selection -->
+                <div class="mb-6 text-right">
+                    <label class="block text-xs font-semibold text-slate-400 mb-2">اختر مستوى الصعوبة:</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button class="diff-select-btn px-3 py-2 rounded-xl bg-slate-800 border border-blue-500/50 text-blue-300 text-xs font-bold hover:bg-blue-600/20 active" data-diff="easy">سهل</button>
+                        <button class="diff-select-btn px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-700" data-diff="medium">متوسط</button>
+                        <button class="diff-select-btn px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-700" data-diff="hard">صعب</button>
+                    </div>
+                </div>
+
+                <button id="start-game-btn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-lg shadow-lg shadow-blue-600/30 transition transform hover:scale-[1.02] active:scale-[0.98]">
+                    ابدأ المعركة الآن 🚀
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over (Win / Loss) Modal -->
+    <div id="gameover-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md hidden">
+        <div class="glass-panel rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl border border-slate-700/60 relative overflow-hidden">
+            <div id="modal-banner-bg" class="absolute inset-0 bg-blue-600/10 blur-xl"></div>
+            
+            <div class="relative z-10">
+                <div id="gameover-icon" class="text-6xl mb-3">🏆</div>
+                <h2 id="gameover-title" class="text-3xl font-black mb-2 text-blue-400">انتصار ساحق!</h2>
+                <p id="gameover-msg" class="text-slate-300 text-sm mb-6">لقد نسقت هجومك ببراعة ودمرت قاعدة العدو!</p>
+
+                <!-- Stats Summary Card -->
+                <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 mb-6 text-right text-xs space-y-2">
+                    <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                        <span class="text-slate-400">الوقت المستغرق:</span>
+                        <span id="stat-time" class="font-bold text-slate-200">01:45</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                        <span class="text-slate-400">القوات المستدعاة:</span>
+                        <span id="stat-deployed" class="font-bold text-blue-400">24 وحدة</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                        <span class="text-slate-400">الأعداء المقضي عليهم:</span>
+                        <span id="stat-kills" class="font-bold text-red-400">18 وحدة</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">صحة القاعدة المتبقية:</span>
+                        <span id="stat-hp" class="font-bold text-emerald-400">75%</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="restart-btn" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-blue-600/30 transition transform hover:scale-[1.02]">
+                        إعادة اللعب 🔄
+                    </button>
+                    <button id="next-level-btn" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-base shadow-lg shadow-emerald-600/30 transition transform hover:scale-[1.02] hidden">
+                        المستوى التالي ➡️
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        /**
+         * Web Audio API Synthesizer (No external audio assets required)
+         */
+        class SoundSystem {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playShoot(pitch = 600, duration = 0.08) {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(pitch, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + duration);
+
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+
+            playExplosion(isHeavy = false) {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const bufferSize = this.ctx.sampleRate * (isHeavy ? 0.4 : 0.2);
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = Math.random() * 2 - 1;
+                    }
+
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(isHeavy ? 400 : 800, this.ctx.currentTime);
+                    filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + (isHeavy ? 0.4 : 0.2));
+
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(isHeavy ? 0.4 : 0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + (isHeavy ? 0.4 : 0.2));
+
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    noise.start();
+                } catch(e) {}
+            }
+
+            playVictory() {
+                if (this.muted || !this.ctx) return;
+                const notes = [261.63, 329.63, 392.00, 523.25]; // C E G C
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => {
+                        try {
+                            const osc = this.ctx.createOscillator();
+                            const gain = this.ctx.createGain();
+                            osc.type = 'triangle';
+                            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                            gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                            osc.connect(gain);
+                            gain.connect(this.ctx.destination);
+                            osc.start();
+                            osc.stop(this.ctx.currentTime + 0.3);
+                        } catch(e) {}
+                    }, idx * 120);
+                });
+            }
+
+            playDefeat() {
+                if (this.muted || !this.ctx) return;
+                const notes = [300, 260, 220, 180];
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => {
+                        try {
+                            const osc = this.ctx.createOscillator();
+                            const gain = this.ctx.createGain();
+                            osc.type = 'sawtooth';
+                            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                            gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+                            osc.connect(gain);
+                            gain.connect(this.ctx.destination);
+                            osc.start();
+                            osc.stop(this.ctx.currentTime + 0.35);
+                        } catch(e) {}
+                    }, idx * 150);
+                });
+            }
+
+            playClick() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.05);
+                } catch(e) {}
+            }
+        }
+
+        const audio = new SoundSystem();
+
+        /**
+         * Game Constants & Configurations
+         */
+        const UNIT_TYPES = {
+            infantry: {
+                name: 'مشاة',
+                cost: 15,
+                cooldown: 2.0,
+                hp: 100,
+                speed: 1.8,
+                range: 80,
+                damage: 12,
+                attackRate: 0.6, // seconds per attack
+                size: 14,
+                color: '#3b82f6',
+                icon: '🪖'
+            },
+            tank: {
+                name: 'دبابة',
+                cost: 40,
+                cooldown: 5.0,
+                hp: 350,
+                speed: 0.9,
+                range: 120,
+                damage: 45,
+                attackRate: 1.5,
+                size: 24,
+                color: '#2563eb',
+                icon: '🛡️'
+            },
+            sniper: {
+                name: 'قناص',
+                cost: 30,
+                cooldown: 4.0,
+                hp: 75,
+                speed: 1.3,
+                range: 220,
+                damage: 60,
+                attackRate: 2.0,
+                size: 12,
+                color: '#60a5fa',
+                icon: '🎯'
+            },
+            artillery: {
+                name: 'صاروخية',
+                cost: 60,
+                cooldown: 8.0,
+                hp: 150,
+                speed: 0.7,
+                range: 320,
+                damage: 80,
+                attackRate: 3.0,
+                size: 20,
+                color: '#1d4ed8',
+                icon: '🚀'
+            }
+        };
+
+        const ABILITIES = {
+            airstrike: { cost: 75, cooldown: 20.0 },
+            repair: { cost: 50, cooldown: 15.0, amount: 250 }
+        };
+
+        // Game State Variable Container
+        const state = {
+            running: false,
+            difficulty: 'easy',
+            level: 1,
+            timeElapsed: 0,
+            energy: 30,
+            maxEnergy: 100,
+            energyRegenRate: 10, // energy per sec
+            playerBaseHP: 1000,
+            playerBaseMaxHP: 1000,
+            enemyBaseHP: 1000,
+            enemyBaseMaxHP: 1000,
+            playerUnits: [],
+            enemyUnits: [],
+            projectiles: [],
+            particles: [],
+            floatingTexts: [],
+            cooldowns: {
+                infantry: 0,
+                tank: 0,
+                sniper: 0,
+                artillery: 0,
+                airstrike: 0,
+                repair: 0
+            },
+            stats: {
+                unitsDeployed: 0,
+                enemiesKilled: 0
+            },
+            enemyAI: {
+                timer: 0,
+                spawnInterval: 4.0
+            }
+        };
+
+        // DOM Element Cache
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const playerHpBar = document.getElementById('player-hp-bar');
+        const playerHpText = document.getElementById('player-hp-text');
+        const enemyHpBar = document.getElementById('enemy-hp-bar');
+        const enemyHpText = document.getElementById('enemy-hp-text');
+        const energyText = document.getElementById('energy-text');
+        const energyBar = document.getElementById('energy-bar');
+        const levelDisplay = document.getElementById('level-display');
+        const timerDisplay = document.getElementById('game-timer');
+        const toastContainer = document.getElementById('toast-container');
+
+        // Responsive Canvas Scaling
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        /**
+         * Unit & Game Entities Definitions
+         */
+        class Unit {
+            constructor(typeKey, isPlayer, startX, y) {
+                const config = UNIT_TYPES[typeKey];
+                this.typeKey = typeKey;
+                this.isPlayer = isPlayer;
+                this.x = startX;
+                this.y = y;
+                this.hp = config.hp;
+                this.maxHp = config.hp;
+                this.speed = config.speed * (isPlayer ? 1 : -1);
+                this.range = config.range;
+                this.damage = config.damage;
+                this.attackRate = config.attackRate;
+                this.size = config.size;
+                this.color = isPlayer ? config.color : '#ef4444';
+                this.lastAttackTime = 0;
+                this.target = null;
+                this.id = Math.random().toString(36).substr(2, 9);
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Body Shape based on type
+                ctx.shadowColor = this.isPlayer ? 'rgba(59, 130, 246, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+                ctx.shadowBlur = 8;
+
+                if (this.typeKey === 'tank') {
+                    // Heavy Tank Box
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(-this.size, -this.size / 1.5, this.size * 2, this.size * 1.3);
+                    // Turret barrel
+                    ctx.fillStyle = '#475569';
+                    ctx.fillRect(this.isPlayer ? 0 : -this.size * 1.5, -3, this.size * 1.5, 6);
+                } else if (this.typeKey === 'sniper') {
+                    // Sniper Triangle
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    if (this.isPlayer) {
+                        ctx.moveTo(this.size, 0);
+                        ctx.lineTo(-this.size, -this.size / 1.2);
+                        ctx.lineTo(-this.size, this.size / 1.2);
+                    } else {
+                        ctx.moveTo(-this.size, 0);
+                        ctx.lineTo(this.size, -this.size / 1.2);
+                        ctx.lineTo(this.size, this.size / 1.2);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Infantry Circle
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Health Bar over Head
+                const hpPercent = Math.max(0, this.hp / this.maxHp);
+                const barW = this.size * 2.2;
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+                ctx.fillRect(-barW / 2, -this.size - 10, barW, 4);
+                ctx.fillStyle = this.isPlayer ? '#3b82f6' : '#ef4444';
+                ctx.fillRect(-barW / 2, -this.size - 10, barW * hpPercent, 4);
+
+                ctx.restore();
+            }
+
+            update(dt, targets, enemyBaseX) {
+                // Search for nearest enemy target
+                let closest = null;
+                let minDist = Infinity;
+
+                for (let t of targets) {
+                    const dist = Math.abs(t.x - this.x);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closest = t;
+                    }
+                }
+
+                // Check distance to Enemy Base if no units
+                const distToBase = Math.abs(enemyBaseX - this.x);
+                if (!closest || distToBase < minDist) {
+                    minDist = distToBase;
+                    closest = { isBase: true, x: enemyBaseX };
+                }
+
+                // In range to attack?
+                if (minDist <= this.range) {
+                    // Attack cooldown logic
+                    if (state.timeElapsed - this.lastAttackTime >= this.attackRate) {
+                        this.attack(closest);
+                        this.lastAttackTime = state.timeElapsed;
+                    }
+                } else {
+                    // Move forward
+                    this.x += this.speed;
+                }
+            }
+
+            attack(target) {
+                // Create Projectile
+                const proj = new Projectile(
+                    this.x, 
+                    this.y, 
+                    target.x, 
+                    target.isBase ? (canvas.height / (2 * window.devicePixelRatio)) : target.y,
+                    this.damage, 
+                    this.isPlayer,
+                    this.typeKey === 'artillery'
+                );
+                state.projectiles.push(proj);
+
+                // Audio effect
+                if (this.typeKey === 'tank' || this.typeKey === 'artillery') {
+                    audio.playExplosion(false);
+                } else {
+                    audio.playShoot(this.isPlayer ? 700 : 500);
+                }
+            }
+        }
+
+        class Projectile {
+            constructor(startX, startY, targetX, targetY, damage, isPlayer, isRocket = false) {
+                this.x = startX;
+                this.y = startY;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.damage = damage;
+                this.isPlayer = isPlayer;
+                this.isRocket = isRocket;
+                this.speed = isRocket ? 4.5 : 9;
+                
+                const angle = Math.atan2(targetY - startY, targetX - startX);
+                this.vx = Math.cos(angle) * this.speed;
+                this.vy = Math.sin(angle) * this.speed;
+                this.reached = false;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.shadowColor = this.isPlayer ? '#60a5fa' : '#f87171';
+                ctx.shadowBlur = 6;
+                ctx.fillStyle = this.isPlayer ? '#fef08a' : '#fca5a5';
+
+                if (this.isRocket) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Smoke Trail
+                    state.particles.push(new Particle(this.x, this.y, '#94a3b8', 2, 0.2));
+                } else {
+                    ctx.fillRect(this.x - 2, this.y - 2, 6, 4);
+                }
+                ctx.restore();
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Check hit target location
+                const distToTarget = Math.hypot(this.targetX - this.x, this.targetY - this.y);
+                if (distToTarget < 12 || (this.isPlayer ? this.x >= this.targetX : this.x <= this.targetX)) {
+                    this.reached = true;
+                    this.impact();
+                }
+            }
+
+            impact() {
+                // Splash damage for rocket
+                const impactRadius = this.isRocket ? 60 : 15;
+                const targets = this.isPlayer ? state.enemyUnits : state.playerUnits;
+
+                targets.forEach(u => {
+                    if (Math.abs(u.x - this.x) <= impactRadius) {
+                        u.hp -= this.damage;
+                        addFloatingText(`-${Math.round(this.damage)}`, u.x, u.y - 15, '#f87171');
+                    }
+                });
+
+                // Base Damage check
+                const baseWidth = 80;
+                const canvasW = canvas.width / window.devicePixelRatio;
+                if (this.isPlayer && this.x >= canvasW - baseWidth) {
+                    state.enemyBaseHP = Math.max(0, state.enemyBaseHP - this.damage);
+                    addFloatingText(`-${Math.round(this.damage)}`, canvasW - 40, canvas.height / (2 * window.devicePixelRatio) - 40, '#f87171');
+                } else if (!this.isPlayer && this.x <= baseWidth) {
+                    state.playerBaseHP = Math.max(0, state.playerBaseHP - this.damage);
+                    addFloatingText(`-${Math.round(this.damage)}`, 40, canvas.height / (2 * window.devicePixelRatio) - 40, '#f87171');
+                }
+
+                // Spark Particles
+                for (let i = 0; i < (this.isRocket ? 12 : 5); i++) {
+                    state.particles.push(new Particle(this.x, this.y, this.isPlayer ? '#60a5fa' : '#ef4444', 3, 0.4));
+                }
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color, size = 3, life = 0.5) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = size;
+                this.maxLife = life;
+                this.life = life;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            update(dt) {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= dt;
+            }
+        }
+
+        function addFloatingText(text, x, y, color = '#ffffff') {
+            state.floatingTexts.push({
+                text, x, y, color, alpha: 1.0, vy: -1
+            });
+        }
+
+        /**
+         * Render Battle Canvas & Ground Terrain
+         */
+        function renderScene() {
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Background Grid Lines & Atmosphere
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.25)';
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let x = 0; x < w; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+
+            // Ground Track Line
+            const groundY = h * 0.7;
+            const gradient = ctx.createLinearGradient(0, groundY, 0, h);
+            gradient.addColorStop(0, '#1e293b');
+            gradient.addColorStop(1, '#0f172a');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, groundY, w, h - groundY);
+
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            ctx.lineTo(w, groundY);
+            ctx.stroke();
+
+            // Player Base (Left)
+            const baseW = 70;
+            ctx.shadowColor = 'rgba(59, 130, 246, 0.5)';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = '#1d4ed8';
+            ctx.fillRect(0, groundY - 120, baseW, 120);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(baseW - 10, groundY - 100, 10, 100);
+
+            // Enemy Base (Right)
+            ctx.shadowColor = 'rgba(239, 68, 68, 0.5)';
+            ctx.fillStyle = '#b91c1c';
+            ctx.fillRect(w - baseW, groundY - 120, baseW, 120);
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(w - baseW, groundY - 100, 10, 100);
+
+            ctx.shadowBlur = 0;
+
+            // Draw Units
+            state.playerUnits.forEach(u => u.draw(ctx));
+            state.enemyUnits.forEach(u => u.draw(ctx));
+
+            // Draw Projectiles
+            state.projectiles.forEach(p => p.draw(ctx));
+
+            // Draw Particles
+            state.particles.forEach(pt => pt.draw(ctx));
+
+            // Draw Floating Texts
+            state.floatingTexts.forEach(ft => {
+                ctx.save();
+                ctx.globalAlpha = ft.alpha;
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 13px sans-serif';
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
+            });
+        }
+
+        /**
+         * Main Game Loop & State Updates
+         */
+        let lastTimestamp = 0;
+        function gameLoop(timestamp) {
+            if (!state.running) return;
+
+            const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+            lastTimestamp = timestamp;
+
+            state.timeElapsed += dt;
+
+            // Update Energy Meter
+            if (state.energy < state.maxEnergy) {
+                state.energy = Math.min(state.maxEnergy, state.energy + state.energyRegenRate * dt);
+            }
+
+            // Update Cooldowns
+            Object.keys(state.cooldowns).forEach(k => {
+                if (state.cooldowns[k] > 0) {
+                    state.cooldowns[k] = Math.max(0, state.cooldowns[k] - dt);
+                }
+            });
+
+            const groundY = (canvas.height / window.devicePixelRatio) * 0.7 - 15;
+            const canvasW = canvas.width / window.devicePixelRatio;
+
+            // Update Player Units
+            state.playerUnits.forEach(u => u.update(dt, state.enemyUnits, canvasW - 70));
+            // Update Enemy Units
+            state.enemyUnits.forEach(u => u.update(dt, state.playerUnits, 70));
+
+            // Filter out dead units
+            state.playerUnits = state.playerUnits.filter(u => u.hp > 0);
+            state.enemyUnits = state.enemyUnits.filter(u => {
+                if (u.hp <= 0) {
+                    state.stats.enemiesKilled++;
+                    return false;
+                }
+                return true;
+            });
+
+            // Update Projectiles
+            state.projectiles.forEach(p => p.update());
+            state.projectiles = state.projectiles.filter(p => !p.reached);
+
+            // Update Particles
+            state.particles.forEach(pt => pt.update(dt));
+            state.particles = state.particles.filter(pt => pt.life > 0);
+
+            // Update Floating Text
+            state.floatingTexts.forEach(ft => {
+                ft.y += ft.vy;
+                ft.alpha -= dt * 0.8;
+            });
+            state.floatingTexts = state.floatingTexts.filter(ft => ft.alpha > 0);
+
+            // AI Spawn Logic
+            updateEnemyAI(dt);
+
+            // Update UI elements
+            updateUI();
+
+            // Check Win / Loss condition
+            checkGameEnd();
+
+            // Render Frame
+            renderScene();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * Enemy AI Controller
+         */
+        function updateEnemyAI(dt) {
+            state.enemyAI.timer += dt;
+            if (state.enemyAI.timer >= state.enemyAI.spawnInterval) {
+                state.enemyAI.timer = 0;
+
+                // Randomly pick unit type based on difficulty
+                const types = ['infantry', 'infantry', 'sniper'];
+                if (state.difficulty === 'medium') types.push('tank');
+                if (state.difficulty === 'hard') types.push('tank', 'artillery');
+
+                const chosenType = types[Math.floor(Math.random() * types.length)];
+                const canvasW = canvas.width / window.devicePixelRatio;
+                const groundY = (canvas.height / window.devicePixelRatio) * 0.7 - 15;
+
+                const enemy = new Unit(chosenType, false, canvasW - 80, groundY + (Math.random() * 10 - 5));
+                state.enemyUnits.push(enemy);
+            }
+        }
+
+        /**
+         * Player Spawning & Abilities Action Handler
+         */
+        function spawnPlayerUnit(typeKey) {
+            const config = UNIT_TYPES[typeKey];
+            if (!config) return;
+
+            if (state.energy < config.cost) {
+                showToast('⚡ لا توجد طاقة كافية!');
+                return;
+            }
+            if (state.cooldowns[typeKey] > 0) return;
+
+            // Deduct Energy & start cooldown
+            state.energy -= config.cost;
+            state.cooldowns[typeKey] = config.cooldown;
+            state.stats.unitsDeployed++;
+
+            audio.playClick();
+
+            const groundY = (canvas.height / window.devicePixelRatio) * 0.7 - 15;
+            const unit = new Unit(typeKey, true, 80, groundY + (Math.random() * 10 - 5));
+            state.playerUnits.push(unit);
+        }
+
+        function triggerAbility(abilityKey) {
+            const config = ABILITIES[abilityKey];
+            if (!config) return;
+
+            if (state.energy < config.cost) {
+                showToast('⚡ لا توجد طاقة كافية!');
+                return;
+            }
+            if (state.cooldowns[abilityKey] > 0) return;
+
+            state.energy -= config.cost;
+            state.cooldowns[abilityKey] = config.cooldown;
+            audio.playClick();
+
+            if (abilityKey === 'airstrike') {
+                showToast('💥 تم استدعاء القصف الجوي!');
+                audio.playExplosion(true);
+                // Damage all enemy units & base
+                const canvasW = canvas.width / window.devicePixelRatio;
+                state.enemyUnits.forEach(u => {
+                    u.hp -= 120;
+                    addFloatingText('-120', u.x, u.y - 20, '#f87171');
+                });
+                state.enemyBaseHP = Math.max(0, state.enemyBaseHP - 150);
+                addFloatingText('-150', canvasW - 40, canvas.height / (2 * window.devicePixelRatio), '#f87171');
+
+                // Visual bomb particles across screen
+                for (let i = 0; i < 30; i++) {
+                    setTimeout(() => {
+                        const rx = Math.random() * (canvasW - 200) + 100;
+                        const ry = (canvas.height / window.devicePixelRatio) * 0.7 - 20;
+                        state.particles.push(new Particle(rx, ry, '#f97316', 6, 0.8));
+                    }, i * 30);
+                }
+            } else if (abilityKey === 'repair') {
+                showToast('🛠️ جاري ترميم القاعدة الزرقاء!');
+                state.playerBaseHP = Math.min(state.playerBaseMaxHP, state.playerBaseHP + config.amount);
+                addFloatingText(`+${config.amount}`, 40, canvas.height / (2 * window.devicePixelRatio), '#34d399');
+            }
+        }
+
+        /**
+         * Update UI Elements & Cooldown Overlays
+         */
+        function updateUI() {
+            // Player HP
+            const pPct = Math.max(0, (state.playerBaseHP / state.playerBaseMaxHP) * 100);
+            playerHpBar.style.width = pPct + '%';
+            playerHpText.textContent = `${Math.round(state.playerBaseHP)} / ${state.playerBaseMaxHP}`;
+
+            // Enemy HP
+            const ePct = Math.max(0, (state.enemyBaseHP / state.enemyBaseMaxHP) * 100);
+            enemyHpBar.style.width = ePct + '%';
+            enemyHpText.textContent = `${Math.round(state.enemyBaseHP)} / ${state.enemyBaseMaxHP}`;
+
+            // Energy Bar
+            energyText.textContent = Math.floor(state.energy);
+            energyBar.style.width = `${(state.energy / state.maxEnergy) * 100}%`;
+
+            // Timer Display
+            const mins = Math.floor(state.timeElapsed / 60).toString().padStart(2, '0');
+            const secs = Math.floor(state.timeElapsed % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${mins}:${secs}`;
+
+            // Cooldown Overlays
+            const keys = ['infantry', 'tank', 'sniper', 'artillery', 'airstrike', 'repair'];
+            keys.forEach(k => {
+                const cdElem = document.getElementById(`cd-${k}`);
+                if (cdElem) {
+                    if (state.cooldowns[k] > 0) {
+                        cdElem.classList.remove('hidden');
+                        cdElem.textContent = `${state.cooldowns[k].toFixed(1)}s`;
+                    } else {
+                        cdElem.classList.add('hidden');
+                    }
+                }
+            });
+
+            // Disable spawn buttons if insufficient energy
+            document.getElementById('btn-spawn-infantry').disabled = state.energy < UNIT_TYPES.infantry.cost;
+            document.getElementById('btn-spawn-tank').disabled = state.energy < UNIT_TYPES.tank.cost;
+            document.getElementById('btn-spawn-sniper').disabled = state.energy < UNIT_TYPES.sniper.cost;
+            document.getElementById('btn-spawn-artillery').disabled = state.energy < UNIT_TYPES.artillery.cost;
+            document.getElementById('btn-ability-airstrike').disabled = state.energy < ABILITIES.airstrike.cost;
+            document.getElementById('btn-ability-repair').disabled = state.energy < ABILITIES.repair.cost;
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'glass-panel px-4 py-2 rounded-xl text-xs font-bold text-slate-100 border border-slate-700 shadow-xl transition-all duration-300 transform translate-y-2 opacity-0';
+            toast.textContent = msg;
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        /**
+         * Game End Logic (Win/Loss)
+         */
+        function checkGameEnd() {
+            if (state.enemyBaseHP <= 0) {
+                endGame(true);
+            } else if (state.playerBaseHP <= 0) {
+                endGame(false);
+            }
+        }
+
+        function endGame(isWin) {
+            state.running = false;
+            const modal = document.getElementById('gameover-modal');
+            const title = document.getElementById('gameover-title');
+            const msg = document.getElementById('gameover-msg');
+            const icon = document.getElementById('gameover-icon');
+            const bannerBg = document.getElementById('modal-banner-bg');
+            const nextBtn = document.getElementById('next-level-btn');
+
+            document.getElementById('stat-time').textContent = timerDisplay.textContent;
+            document.getElementById('stat-deployed').textContent = `${state.stats.unitsDeployed} وحدة`;
+            document.getElementById('stat-kills').textContent = `${state.stats.enemiesKilled} وحدة`;
+            document.getElementById('stat-hp').textContent = `${Math.round((state.playerBaseHP / state.playerBaseMaxHP) * 100)}%`;
+
+            if (isWin) {
+                audio.playVictory();
+                icon.textContent = '🏆';
+                title.textContent = 'انتصار ساحق!';
+                title.className = 'text-3xl font-black mb-2 text-emerald-400';
+                msg.textContent = 'لقد دمرت حصن العدو بالكامل وقادت قواتك للنصر!';
+                bannerBg.className = 'absolute inset-0 bg-emerald-600/10 blur-xl';
+                nextBtn.classList.remove('hidden');
+            } else {
+                audio.playDefeat();
+                icon.textContent = '💀';
+                title.textContent = 'هزيمة المعركة!';
+                title.className = 'text-3xl font-black mb-2 text-red-400';
+                msg.textContent = 'تم اختراق دفاعات قاعدتك، أعد ترتيب صفوفك وحاول مجدداً.';
+                bannerBg.className = 'absolute inset-0 bg-red-600/10 blur-xl';
+                nextBtn.classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        /**
+         * Reset / Start Game Routine
+         */
+        function resetGame(levelIncrease = false) {
+            if (levelIncrease) {
+                state.level++;
+            }
+            levelDisplay.textContent = `مستوى ${state.level}`;
+
+            state.running = true;
+            state.timeElapsed = 0;
+            state.energy = 40;
+            state.playerBaseHP = 1000;
+            state.enemyBaseHP = 1000 + (state.level - 1) * 200;
+            state.enemyBaseMaxHP = state.enemyBaseHP;
+            state.playerUnits = [];
+            state.enemyUnits = [];
+            state.projectiles = [];
+            state.particles = [];
+            state.floatingTexts = [];
+            state.stats.unitsDeployed = 0;
+            state.stats.enemiesKilled = 0;
+
+            // AI Speed tuning based on difficulty & level
+            let interval = 4.0;
+            if (state.difficulty === 'medium') interval = 3.2;
+            if (state.difficulty === 'hard') interval = 2.4;
+            state.enemyAI.spawnInterval = Math.max(1.5, interval - (state.level - 1) * 0.3);
+
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('gameover-modal').classList.add('hidden');
+
+            resizeCanvas();
+            lastTimestamp = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * Event Listeners & Keyboard Hotkeys
+         */
+        document.getElementById('start-game-btn').addEventListener('click', () => {
+            audio.init();
+            resetGame();
+        });
+
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            audio.init();
+            resetGame(false);
+        });
+
+        document.getElementById('next-level-btn').addEventListener('click', () => {
+            audio.init();
+            resetGame(true);
+        });
+
+        // Sound Toggle Button
+        const soundBtn = document.getElementById('sound-toggle-btn');
+        soundBtn.addEventListener('click', () => {
+            audio.init();
+            audio.muted = !audio.muted;
+            soundBtn.textContent = audio.muted ? '🔇' : '🔊';
+        });
+
+        // Difficulty Selection Buttons
+        document.querySelectorAll('.diff-select-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.diff-select-btn').forEach(b => {
+                    b.classList.remove('border-blue-500/50', 'text-blue-300', 'active');
+                    b.classList.add('border-slate-700', 'text-slate-300');
+                });
+                btn.classList.remove('border-slate-700', 'text-slate-300');
+                btn.classList.add('border-blue-500/50', 'text-blue-300', 'active');
+                state.difficulty = btn.dataset.diff;
+            });
+        });
+
+        // Button Click Listeners for Units & Abilities
+        document.getElementById('btn-spawn-infantry').addEventListener('click', () => spawnPlayerUnit('infantry'));
+        document.getElementById('btn-spawn-tank').addEventListener('click', () => spawnPlayerUnit('tank'));
+        document.getElementById('btn-spawn-sniper').addEventListener('click', () => spawnPlayerUnit('sniper'));
+        document.getElementById('btn-spawn-artillery').addEventListener('click', () => spawnPlayerUnit('artillery'));
+        document.getElementById('btn-ability-airstrike').addEventListener('click', () => triggerAbility('airstrike'));
+        document.getElementById('btn-ability-repair').addEventListener('click', () => triggerAbility('repair'));
+
+        // Keyboard Shortcuts (1-4, Q, W)
+        window.addEventListener('keydown', (e) => {
+            if (!state.running) return;
+            switch(e.key) {
+                case '1': spawnPlayerUnit('infantry'); break;
+                case '2': spawnPlayerUnit('tank'); break;
+                case '3': spawnPlayerUnit('sniper'); break;
+                case '4': spawnPlayerUnit('artillery'); break;
+                case 'q':
+                case 'Q':
+                case 'ض': triggerAbility('airstrike'); break;
+                case 'w':
+                case 'W':
+                case 'ص': triggerAbility('repair'); break;
+            }
+        });
+
+        // Initial Canvas setup
+        resizeCanvas();
+    </script>
+</body>
+</html>
